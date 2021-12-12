@@ -2,7 +2,6 @@ package vainpath
 
 import (
 	"path/filepath"
-	"regexp"
 	"strings"
 )
 
@@ -15,14 +14,22 @@ func Clean(path string) string {
 	path = filepath.ToSlash(filepath.Clean(path)) /* Windows-sensitive */
 	segments := strings.Split(path, "/")
 
-	exp := regexp.MustCompile("[ [:punct:]]?.")
 	/* Skips final index */
 	for i := len(segments) - 2; i >= 0; i-- {
-		segments[i] = exp.FindString(segments[i])
+		switch segments[i][:1] {
+		/* RegEx equivalent is [ [:punct:]] */
+		case " ", "]", "[", "!", "\"", "#", "$", "%", "&", "'", "(", ")", "*", "+", ",", ".",
+			"/", ":", ";", "<", "=", ">", "?", "@", "\\", "^", "_", "`", "{", "|", "}", "~", "-":
+			if len(segments[i]) > 1 {
+				segments[i] = segments[i][:2]
+			}
+		default:
+			segments[i] = segments[i][:1]
+		}
 	}
 
 	if path[:1] == "/" {
 		segments[0] = "/" + segments[0]
 	}
-	return filepath.Join(segments...) /* Windows-sensitive */
+	return strings.Join(segments, string(filepath.Separator)) /* Windows-sensitive */
 }
