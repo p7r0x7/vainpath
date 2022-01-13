@@ -3,23 +3,42 @@ package vainpath
 import (
 	"encoding/ascii85"
 	"math/rand"
+	"path/filepath"
 	"testing"
+	"time"
+	"unicode/utf8"
 )
 
-// Copyright © 2021 Matthew R Bonnette. Licensed under a BSD-3-Clause license.
+// Copyright © 2022 Matthew R Bonnette. Licensed under a BSD-3-Clause license.
+
+const unilen, asclen, segments = 5, 20, 4
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
 
 func BenchmarkClean(b *testing.B) {
-	const length, segments = 25, 4
-	var path string
+	var (
+		path  string
+		char  rune
+		bytes = make([]byte, asclen/5*4-3) /* Encoding adds length */
+		enc   = make([]byte, asclen)
+	)
 
 	for i := segments; i > 0; i-- {
-		bytes := make([]byte, length)
+		for i2 := unilen; i2 > 0; i2-- {
+			char = rand.Int31()
+			for !utf8.ValidRune(char) {
+				char = rand.Int31()
+			}
+			path += string(char)
+		}
 		rand.Read(bytes)
-		str := make([]byte, ascii85.MaxEncodedLen(length))
-		ascii85.Encode(str, bytes)
-		path += string(str) + "/"
+		ascii85.Encode(enc, bytes)
+		path += string(enc) + string(filepath.Separator)
 	}
 
+	// fmt.Println(path + "\n" + Clean(path))
 	b.SetBytes(int64(len(path)))
 	b.ReportAllocs()
 	b.ResetTimer()
