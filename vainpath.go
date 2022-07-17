@@ -11,28 +11,48 @@ import (
 
 // Clean formats inputs in a way similar to the fish shell's method of shortening paths in
 // 'fish/functions/prompt_pwd.fish' and is properly Windows-sensitive; it will almost certainly not
-// return valid paths and should be used for vanity purposes only. If path is an invalid
-// UTF-8-encoded string, it is returned unaltered.
+// return valid paths and should be used for vanity purposes only. Inputs are assumed to be valid
+// UTF-8-encoded strings; behavior is undefined for other inputs.
 func Clean(path string) string {
-	if path == "" || !ValidString(path) {
+	path = filepath.Clean(path)
+	/* Bytes of ASCII and non-ASCII code points cannot be mistaken for each other. */
+	dex := strings.LastIndexByte(path, filepath.Separator)
+	if len(path) < 4 || dex < 2 {
+		// The following cannot be any more shortened:
+		// a) paths smaller than 4 bytes
+		// b) paths without separators (dex of -1)
+		// c) paths where the only separator is the first or second character (dex of 0 or 1)
 		return path
 	}
-	segments := strings.Split(filepath.Clean(path), string(filepath.Separator))
 
-	/* Skips final index */
-	for i, v := range segments[:len(segments)-1] {
-		if RuneCountInString(v) < 2 {
-			continue
+	/* Max memory requirement: root + sepCount * twoRunesAndSep + suffix. */
+	out, suffix := strings.Builder{}, path[dex+1:] /* There will always be more bytes. */
+	out.Grow(1 + strings.Count(path, string(filepath.Separator))*9 + len(suffix))
+	path = path[:dex+1]
+
+	/* For performance reasons, this section is more verbose than strictly necessary. */
+	for len(path) > 0 {
+		r, w := DecodeRuneInString(path)
+		out.WriteString(path[:w])
+
+		if !unicode.IsLetter(r) {
+			path = path[w:]
+			if path[0] == filepath.Separator {
+				out.WriteByte(filepath.Separator)
+				path = path[1:]
+				continue
+			}
+			_, w = DecodeRuneInString(path)
+			out.WriteString(path[:w])
 		}
 
-		r, w0 := DecodeRuneInString(v)
-		if unicode.IsLetter(r) {
-			segments[i] = v[:w0]
-		} else {
-			_, w1 := DecodeRuneInString(v[w0:])
-			segments[i] = v[:w0+w1]
+		for path[w] != filepath.Separator {
+			w++
 		}
+		out.WriteByte(filepath.Separator)
+		path = path[w+1:]
 	}
 
-	return strings.Join(segments, string(filepath.Separator))
+	out.WriteString(suffix)
+	return out.String()
 }
