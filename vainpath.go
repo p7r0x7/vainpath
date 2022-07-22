@@ -1,7 +1,7 @@
 package vainpath
 
 import (
-	"path/filepath"
+	. "path/filepath"
 	"strings"
 	"unicode"
 	. "unicode/utf8"
@@ -9,50 +9,51 @@ import (
 
 // Copyright © 2022 Matthew R Bonnette. Licensed under a BSD-3-Clause license.
 
-// Clean formats inputs in a way similar to the fish shell's method of shortening paths in
+// Shorten formats inputs in a way similar to the fish shell's method of shortening paths in
 // 'fish/functions/prompt_pwd.fish' and is properly Windows-sensitive; it will almost certainly not
 // return valid paths and should be used for vanity purposes only. Inputs are assumed to be valid
 // UTF-8-encoded strings; behavior is undefined for other inputs.
-func Clean(path string) string {
-	path = filepath.Clean(path)
+func Shorten(path string) string {
+	path = Clean(path)
 	/* Bytes of ASCII and non-ASCII code points cannot be mistaken for each other. */
-	dex := strings.LastIndexByte(path, filepath.Separator)
+	dex := strings.LastIndexByte(path, Separator)
 	if len(path) < 4 || dex < 2 {
-		// The following cannot be any more shortened:
+		// The following already-cleaned paths cannot be any more shortened:
 		// a) paths smaller than 4 bytes
 		// b) paths without separators (dex of -1)
 		// c) paths where the only separator is the first or second character (dex of 0 or 1)
 		return path
 	}
 
+	/* There will always be more bytes. */
+	out, prefix, suffix, w := strings.Builder{}, path[:dex+1], len(path[dex+1:]), 0
 	/* Max memory requirement: root + sepCount * twoRunesAndSep + suffix. */
-	out, suffix := strings.Builder{}, path[dex+1:] /* There will always be more bytes. */
-	out.Grow(1 + strings.Count(path, string(filepath.Separator))*9 + len(suffix))
-	path = path[:dex+1]
+	out.Grow(1 + strings.Count(path, string(Separator))*9 + suffix)
 
 	/* For performance reasons, this section is more verbose than strictly necessary. */
-	for len(path) > 0 {
-		r, w := DecodeRuneInString(path)
-		out.WriteString(path[:w])
-
+	if prefix[0] == Separator {
+		w++
+	}
+	for len(prefix[w:]) > 0 {
+		r, t := DecodeRuneInString(prefix[w:])
+		if w += t; prefix[w] == Separator {
+			w++
+			continue
+		}
 		if !unicode.IsLetter(r) {
-			path = path[w:]
-			if path[0] == filepath.Separator {
-				out.WriteByte(filepath.Separator)
-				path = path[1:]
+			_, t = DecodeRuneInString(prefix[w:])
+			if w += t; prefix[w] == Separator {
+				w++
 				continue
 			}
-			_, w = DecodeRuneInString(path)
-			out.WriteString(path[:w])
 		}
-
-		for path[w] != filepath.Separator {
+		out.WriteString(prefix[:w])
+		for w++; prefix[w] != Separator; {
 			w++
 		}
-		out.WriteByte(filepath.Separator)
-		path = path[w+1:]
+		prefix, w = prefix[w:], 1
 	}
 
-	out.WriteString(suffix)
+	out.WriteString(path[len(path)-w-suffix:])
 	return out.String()
 }
