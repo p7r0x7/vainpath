@@ -2,7 +2,8 @@ package vainpath
 
 import (
 	"math/rand"
-	"path/filepath"
+	. "path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -12,65 +13,96 @@ import (
 
 // Copyright © 2022 Matthew R Bonnette. Licensed under a BSD-3-Clause license.
 
-var worstCase = strings.Repeat(string([]rune{'߿', filepath.Separator}), 1e4)
-var bestCase = strings.Repeat(string(filepath.Separator), 3e4)
-
 func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
-func makePath(utf, asc, seg int) string {
-	var path strings.Builder
-	path.Grow((1 + utf*4 + asc) * seg)
+func min(x, y int) int {
+	if x < y {
+		return x
+	}
+	return y
+}
 
-	for i := seg; i > 0; i-- {
-		for i2 := utf; i2 > 0; i2-- {
-			r := rand.Int31()
-			for !ValidRune(r) {
-				r = rand.Int31()
+func randPath(size int) string {
+	var path strings.Builder
+	for path.Grow(size); size > 0; size-- {
+		if r := rand.Int31(); r%32 == 0 {
+			path.WriteByte(Separator)
+
+		} else if r%8 == 0 && size > 1 {
+			for r = 0; !unicode.IsPrint(r); {
+				switch min(4, size) {
+				case 4:
+					r = rand.Int31() & '\U0010FFFF'
+				case 3:
+					r = rand.Int31() >> 8 & '\uFFFF'
+				case 2:
+					r = rand.Int31() >> 16 & '\u07FF'
+				}
 			}
+			size -= min(4, size) - 1
 			path.WriteRune(r)
+
+		} else {
+			path.WriteByte(byte(rand.Int31()%95 + 32))
 		}
-		for i2 := asc; i2 > 0; i2-- {
-			path.WriteByte(byte(rand.Int()%95 + 32))
-		}
-		path.WriteByte(filepath.Separator)
 	}
 
 	return path.String()
 }
 
 func TestValidate(t *testing.T) {
-	const count int = 1e4
-	for i := count; i > 0; i-- {
-		path := makePath(2, 20, 4)
-		if r, c := refClean(path), Clean(path); r != c {
-			t.Log("path: " + path + " ref: " + r + " clean: " + c)
+	space, log := strings.Repeat(" ", 40), strings.Builder{}
+
+	for i := 0; i < 1e5; i++ {
+		path := randPath(50)
+		if s, r := Shorten(path), refShorten(path); s != r {
+			if log.Len() < 4*1024 {
+				dex := strconv.Itoa(i)
+				for _, v := range []string{
+					"\n", space[:5-len(dex)], dex, "  ",
+					s, space[:40-min(40, RuneCountInString(s))], " \t",
+					r, space[:40-min(40, RuneCountInString(r))], " \t",
+					path,
+				} {
+					log.WriteString(v)
+				}
+			}
 			t.Fail()
 		}
+	}
+	if t.Failed() {
+		t.Log(log.String())
 	}
 }
 
 func BenchmarkAvgClean(b *testing.B) {
+	const bestPath = string(Separator)
+	const worstPath = "\u07FF " + string(Separator)
+	fast := strings.Repeat(bestPath, b.N)
+	slow := strings.Repeat(worstPath, b.N/len(worstPath)+1)
+
 	b.SetBytes(int64(b.N))
+	b.ResetTimer()
 	for i := b.N; i > 0; i-- {
-		refClean(bestCase[:i])
-		refClean(worstCase[:i])
+		Shorten(fast[:i])
+		Shorten(slow[:i])
 	}
 }
 
 func BenchmarkRandClean(b *testing.B) {
-	path := makePath(2, 200, 4)
-	b.SetBytes(int64(len(path)))
+	path := randPath(120)
+	b.SetBytes(120)
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := b.N; i > 0; i-- {
-		refClean(path)
+		Shorten(path)
 	}
 }
 
-func refClean(path string) string {
-	segments := strings.Split(filepath.Clean(path), string(filepath.Separator))
+func refShorten(path string) string {
+	segments := strings.Split(Clean(path), string(Separator))
 
 	/* Skips final index */
 	for i, v := range segments[:len(segments)-1] {
@@ -87,5 +119,5 @@ func refClean(path string) string {
 		}
 	}
 
-	return strings.Join(segments, string(filepath.Separator))
+	return strings.Join(segments, string(Separator))
 }
