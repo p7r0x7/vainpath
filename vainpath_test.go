@@ -41,7 +41,7 @@ func randPath(size int) string {
 					r = rand.Int31() >> 16 & '\u07FF'
 				}
 			}
-			size -= min(4, size) - 1
+			size -= RuneLen(r) - 1
 			path.WriteRune(r)
 
 		} else {
@@ -60,7 +60,7 @@ func TestValidate(t *testing.T) {
 		if s, r := Shorten(path), refShorten(path); s != r {
 			if log.Len() < 4*1024 {
 				dex := strconv.Itoa(i)
-				for _, v := range []string{
+				for _, v := range [...]string{
 					"\n", space[:5-len(dex)], dex, "  ",
 					s, space[:40-min(40, RuneCountInString(s))], " \t",
 					r, space[:40-min(40, RuneCountInString(r))], " \t",
@@ -77,7 +77,7 @@ func TestValidate(t *testing.T) {
 	}
 }
 
-func BenchmarkAvgClean(b *testing.B) {
+func BenchmarkAvgShorten(b *testing.B) {
 	const bestPath = string(Separator)
 	const worstPath = "\u07FF " + string(Separator)
 	fast := strings.Repeat(bestPath, b.N)
@@ -91,7 +91,7 @@ func BenchmarkAvgClean(b *testing.B) {
 	}
 }
 
-func BenchmarkRandClean(b *testing.B) {
+func BenchmarkRandShorten(b *testing.B) {
 	path := randPath(120)
 	b.SetBytes(120)
 	b.ReportAllocs()

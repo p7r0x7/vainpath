@@ -1,6 +1,7 @@
 package vainpath
 
 import (
+	"math/bits"
 	. "path/filepath"
 	"strings"
 	"unicode"
@@ -48,8 +49,15 @@ func Shorten(path string) string {
 			}
 		}
 		out.WriteString(prefix[:w])
-		for w++; prefix[w] != Separator; {
-			w++
+		for {
+			if c := prefix[w]; c < RuneSelf {
+				if c == Separator {
+					break
+				}
+				w++
+			} else {
+				w += bits.LeadingZeros8(^c)
+			}
 		}
 		prefix, w = prefix[w:], 1
 	}
