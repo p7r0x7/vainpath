@@ -56,7 +56,7 @@ func TestValidate(t *testing.T) {
 	space, log := strings.Repeat(" ", 40), strings.Builder{}
 
 	for i := 0; i < 1e5; i++ {
-		path := randPath(50)
+		path := randPath(rand.Int() % 60)
 		if s, r := Shorten(path), refShorten(path); s != r {
 			if log.Len() < 4*1024 {
 				dex := strconv.Itoa(i)
